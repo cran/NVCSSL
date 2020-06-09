@@ -1,0 +1,14 @@
+# Exports
+
+export(NVC_frequentist)
+export(NVC_SSL)
+export(predict_NVC)
+export(robustified_NVC_SSL)
+
+# Imports
+
+importFrom("stats","sd","qchisq")
+importFrom("splines","bs")
+importFrom("plyr","rbind.fill.matrix","count")
+importFrom("grpreg","grpreg","cv.grpreg")
+importFrom("Matrix","det","nearPD")

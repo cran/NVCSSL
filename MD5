@@ -1,0 +1,15 @@
+c7028fdcad39eeeea8372a59e1d3cbd5 *DESCRIPTION
+ac9fb2ccf382ed78ba58cc0cd5032362 *NAMESPACE
+31f025c556abb29c45f411630bd517bb *R/NVC_SSL.R
+27ca769f244b36022c16ff13e1a730c7 *R/NVC_frequentist.R
+3130a7fca42ef29afd539db9db360395 *R/helper_functions.R
+041f37f14bb3c43f9ec6d9a6c6b0fd9a *R/predict_NVC.R
+be2141ef815f6ab6829d799544de2c93 *R/robustified_NVC_SSL.R
+c1ee3005dc70b1a71c3762648a63cf2a *data/SimulatedData.RData
+4d0d2b09507dc19b3f0681559c1916ee *data/yeast.RData
+e9fa0a8096370c9b79099005d5515222 *man/NVC_SSL.Rd
+c63fba6faa7f707488a5f0c41e678fd8 *man/NVC_frequentist.Rd
+58d6e78f2d7ea24ea769d837feda1d92 *man/SimulatedData.Rd
+2b67a93ad171c36a6d8acaa69de34478 *man/predict_NVC.Rd
+e2e3e2ef6ea83bfe0f43c4f2c5bcd585 *man/robustified_NVC_SSL.Rd
+4881dbc5728317faafc6da7da0dd8a5b *man/yeast.Rd
