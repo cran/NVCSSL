@@ -1,14 +1,18 @@
 # Exports
 
-export(NVC_frequentist)
 export(NVC_SSL)
-export(predict_NVC)
-export(robustified_NVC_SSL)
+export(NVC_predict)
+export(NVC_frequentist)
 
 # Imports
 
-importFrom("stats","sd","qchisq")
 importFrom("splines","bs")
-importFrom("plyr","rbind.fill.matrix","count")
-importFrom("grpreg","grpreg","cv.grpreg")
-importFrom("Matrix","det","nearPD")
+importFrom("stats","sd","qchisq","quantile","rgamma","rbinom","rbeta","rnorm")
+importFrom("dae","mat.dirsum")
+importFrom("plyr","count")
+importFrom("Matrix","chol2inv","chol")
+importFrom("GIGrvg","rgig")
+importFrom("MASS","mvrnorm")
+importFrom("MCMCpack","riwish")
+importFrom("grpreg","grpreg","select")
+importFrom("mvtnorm","dmvnorm")

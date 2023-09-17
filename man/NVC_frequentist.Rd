@@ -1,125 +1,89 @@
 \name{NVC_frequentist}
 \alias{NVC_frequentist}
 
-\title{Nonparametric Varying Coefficient Model Fitting with Frequentist Penalties}
+\title{Fits frequentist penalized nonparametric varying coefficient (NVC) models}
 
-\description{This function fits frequentist sparse nonparametric varying coefficients (NVC) models for repeated measures data using basis expansions with regularization on groups of basis coefficients. NVC models aim to estimate the functions of time, \eqn{\beta_1(t), \ldots, \beta_p(t)}, in the model,
-\deqn{y_i(t_{ij}) = \sum_{k=1}^{p} x_{ik}(t_{ij}) \beta_k(t_{ij}) + \varepsilon_{ij},}
-where the subscript \eqn{ij} refers to the \eqn{j}th observation for the \eqn{i}th subject.
+\description{This function implements frequentist penalized nonparametric varying coefficient (NVC) models. It supports the following penalty functions: the group lasso penalty of Yuan and Lin (2006), the group minimax concave penalty (MCP) of Breheny and Huang (2015), and the group smoothly clipped absolute deviation (SCAD) penalty of Breheny and Huang (2015). This function solves a penalized regression problem of the form,
 
-Unlike the Bayesian NVC-SSL model, this function does \emph{not} model the within-subject temporal correlations. The data does \emph{not} need to be regularly spaced. In particular, we have \eqn{n} subjects with \eqn{n_i, i=1, \ldots, n} within-study observations each, for a total of \eqn{N=\sum_{i=1}^{n} n_i} observations. 
+\deqn{ argmax_{\gamma} \frac{1}{N} \ell(\gamma) + pen_{\lambda}(\gamma),}
+ 
+ where \eqn{N} is the total number of observations, \eqn{\ell(\gamma)} is the loss function, and \eqn{pen_{\lambda}(\cdot)} is a penalty function with regularization parameter \eqn{\lambda > 0}. Since the objective function is rescaled by \eqn{1/N}, the penalty \eqn{\lambda} is typically smaller than the spike hyperparameter \eqn{\lambda_0} used by the \code{NVC_SSL} function. The BIC criterion is used to select the optimal tuning parameter \eqn{\lambda}.
 }
 
-\usage{NVC_frequentist(y, t, X, df=8, penalty=c("gLasso","gSCAD","gMCP"), lambda = NULL)}
+\usage{
+NVC_frequentist(y, t, X, n_basis=8, penalty=c("gLASSO","gSCAD","gMCP"),
+                lambda=NULL, include_intercept=TRUE) 
+}
 
 \arguments{
-  \item{y}{\eqn{N \times 1} vector of all observed responses, \eqn{(y_{11}, \ldots, y_{1 n_1}, \ldots, y_{n1}, \ldots, y_{n n_n})'}.}
-  \item{t}{\eqn{N \times 1} vector of all time points, \eqn{(t_{11}, \ldots, t_{1 n_1}, \ldots, t_{n1}, \ldots, t_{n n_n})'}.}
-  \item{X}{\eqn{N \times p} design matrix of possibly time-varying covariates. The \eqn{k}th column of \eqn{X} is \eqn{(x_{1k}(t_{11}), \ldots, x_{1k}(t_{1 n_1}), \ldots, x_{nk}(t_{n1}), \ldots, x_{nk}(t_{n n_n}))'}.}
-  \item{df}{number of basis functions to use in each basis expansion. Default is \code{df=8}, but the user may specify degrees of freedom as any integer greater than or equal to 3. }
-  \item{penalty}{group regularization method to use on the groups of basis coefficients. \code{"gLasso"} is the group lasso penalty, \code{"gSCAD"} is the group SCAD penalty, and \code{"gMCP"} is the group minimax concave penalty (MCP).}
-  \item{lambda}{Optional grid for tuning the regularization parameter \eqn{\lambda} from cross-validation. If the user does not provide this, the program chooses the grid automatically. }
+\item{y}{\eqn{N \times 1} vector of response observations \eqn{y_{11}, ..., y_{1m_1}, ..., y_{n1}, ..., y_{nm_n}}}
+\item{t}{\eqn{N \times 1} vector of observation times \eqn{t_{11}, ..., t_{1m_1}, ..., t_{n1}, ..., t_{nm_n}}}
+\item{X}{\eqn{N \times p} design matrix with columns \eqn{[X_1, ..., X_p]}, where the \eqn{k}th column contains the entries \eqn{x_{ik}(t_{ij})}'s}
+\item{n_basis}{number of basis functions to use. Default is \code{n_basis=8}.}
+\item{penalty}{string specifying which penalty function to use. Specify \code{"gLASSO"} for group lasso, \code{"gSCAD"} for group SCAD, or \code{"gMCP"} for group MCP.}
+\item{lambda}{grid of tuning parameters. If \code{lambda} is not specified (i.e. \code{lambda=NULL}), then the program automatically chooses a grid for \code{lambda}. Note that since the objective function is scaled by \eqn{1/N}, the automatically chosen grid for \code{lambda} typically consists of smaller values than the default grid for \code{lambda0} used by the function \code{NVC_SSL}.}
+\item{include_intercept}{Boolean variable for whether or not to include an intercept function \eqn{\beta_0(t)} in the estimation. Default is \code{include_intercept=TRUE}.}
 }
 
 \value{The function returns a list containing the following components:
-\item{t.ordered}{all \eqn{N} time points in order from smallest to largest. Needed for plotting.}
-\item{beta.hat}{\eqn{N \times p} matrix of the function estimates. The \eqn{k}th column is the function estimate \eqn{\beta_k(t_{ij})} evaluated at the \eqn{N} time observations \eqn{t_{ij}, i=1,...,n, j=1,...,n_i}.}
-\item{gamma.hat}{\eqn{df \times p} estimated basis coefficients \eqn{\gamma}. Needed for prediction.}
-\item{intercept}{Estimate of an intercept (or grand mean). Needed for prediction.}
-\item{classifications}{\eqn{p \times 1} vector of binary variables for the \eqn{p} covariates. "1" indicates that the covariate was selected, and "0" indicates that it was not selected.}
-\item{AICc}{AIC with correction for small sample size. This value can be used for tuning the degrees of freedom \code{df}. The user should pick the model which obtains the lowest \eqn{AIC_c}.}
+\item{t_ordered}{all \eqn{N} time points ordered from smallest to largest. Needed for plotting.}
+\item{classifications}{\eqn{p \times 1} vector of indicator variables, where \code{"1"} indicates that the covariate is selected and \code{"0"} indicates that it is not selected. These classifications are determined by the optimal \code{lambda} chosen from BIC. Note that this vector does not include an intercept function.}
+\item{beta_hat}{\eqn{N \times p} matrix of the estimates for varying coefficient functions \eqn{\beta_k(t), k = 1, ..., p}, using the optimal \code{lambda} chosen from BIC. The \eqn{k}th column in the matrix is the \eqn{k}th estimated function at the observation times in \code{t_ordered}.}
+\item{beta0_hat}{estmate of the intercept function \eqn{\beta_0(t)} at the observation times in \code{t_ordered} for the optimal \code{lambda} chosen from BIC. This is not returned if \code{include_intercept = FALSE}.}
+\item{gamma_hat}{estimated basis coefficients (needed for prediction) for the optimal \code{lambda}.}
+\item{lambda_min}{the individual \code{lambda} which minimizes the BIC. If only one value was originally passed for \code{lambda}, then this just returns that \code{lambda}.}
+\item{lambda0_all}{grid of all \eqn{L} regularization parameters in \code{lambda}.  Note that since the objective function is scaled by \eqn{1/N} for the penalized frequentist methods in the \code{NVC_frequentist} function, the \code{lambda_all} grid that is chosen automatically by \code{NVC_frequentist} typically consists of smaller values than the default values in the \code{lambda0_all} grid for \code{NVC_SSL}.} 
+\item{BIC_all}{\eqn{L \times 1} vector of BIC values corresponding to all \eqn{L} entries in \code{lambda_all}. The \eqn{l}th entry corresponds to the \eqn{l}th entry in \code{lambda_all}.}
+\item{beta_est_all_lambda}{list of length \eqn{L} of the estimated varying coefficients \eqn{\beta_k(t), k = 1, ..., p}, corresponding to all \eqn{L} lambdas in \code{lambda_all}. The \eqn{l}th entry corresponds to the \eqn{l}th entry in \code{lambda_all}.}
+\item{beta0_est_all_lambda}{\eqn{N \times L} matrix of estimated intercept function \eqn{\beta_0(t)} corresponding to all \eqn{L} entries in \code{lambda_all}. The \eqn{l}th column corresponds to the \eqn{l}th entry in \code{lambda_all}. This is not returned if \code{include_intercept=FALSE}.}
+\item{gamma_est_all_lambda}{\eqn{dp \times L} matrix of estimated basis coefficients corresponding to all entries in \code{lambda_all}. The \eqn{l}th column corresponds to the \eqn{l}th entry in \code{lambda_all}.}
+\item{classifications_all_lambda}{\eqn{p \times L} matrix of classifications corresponding to all the entries in \code{lambda_all}. The \eqn{l}th column corresponds to the \eqn{l}th entry in \code{lambda_all}.}
+\item{iters_to_converge}{number of iterations it took for the group ascent algorithm to converge for each entry in \code{lambda_all}. The \eqn{l}th entry corresponds to the \eqn{l}th entry in \code{lambda_all}.}
 }
 
-\references{ 
-Bai, R., Boland, M. R., and Chen, Y. (2020). "Fast algorithms and theory for high-dimensional Bayesian varying coefficient models." \emph{arXiv preprint arXiv:1907.06477}.
+\references{
+Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{arXiv pre-print arXiv:arXiv:1907.06477}.
 
-Huang, J., Breheny, P., and Ma, S. (2012). "A selective review of group selection in high-dimensional models." \emph{Statistical Science}, \bold{27}: 481-499.
+Breheny, P. and Huang, J. (2015). "Group descent algorithms for nonconvex penalized linear and logistic regression models with grouped predictors." \emph{Statistics and Computing}, \bold{25}:173-187.
+  
+Wei, F., Huang, J., and Li, H. (2011). "Variable selection and estimation in high-dimensional varying coefficient models." \emph{Statistica Sinica}, \bold{21}:1515-1540.  
+
+Yuan, M. and Lin, Y. (2006). "Model selection and estimation in regression with grouped variables." \emph{Journal of the Royal Statistical Society: Series B (Statistical Methodology)}, \bold{68}:49-67.
+  
 }
 
 \examples{
-
-#####################################
-# Example on the synthetic data set #
-#####################################
+## Load data
 data(SimulatedData)
 attach(SimulatedData)
-y = SimulatedData$y
-t = SimulatedData$t
-X = SimulatedData[,4:103]
-
-## Set seed
-set.seed(123)
-
-## Fit frequentist NVC model with group MCP penalty
-
-nvc.gMCP.mod = NVC_frequentist(y=y, t=t, X=X, penalty="gMCP")
-
-## AIC with correction for sample size. Can use this to tune df
-nvc.gMCP.mod$AICc
-
-## The first 6 functionals were classified as nonzero
-nvc.gMCP.mod$classifications
-
-## Make plot of the 6 active functionals
-
-oldpar <- par(no.readonly = TRUE)
-
-t.ordered = nvc.gMCP.mod$t.ordered
-beta.hat = nvc.gMCP.mod$beta.hat
-
-par(mfrow=c(3,2), mar=c(4,4,4,4))
-plot(t.ordered, beta.hat[,1], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(-10,10), ylab=expression(beta[1]))
-plot(t.ordered, beta.hat[,2], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(-8,8), ylab=expression(beta[2]))
-plot(t.ordered, beta.hat[,3], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(-7,4), ylab=expression(beta[3]))
-plot(t.ordered, beta.hat[,4], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(-6,4), ylab=expression(beta[4]))
-plot(t.ordered, beta.hat[,5], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(0,15), ylab=expression(beta[5]))
-plot(t.ordered, beta.hat[,6], lwd=3, type='l', col='purple', 
-     xlab="T", ylim=c(-5,0), ylab=expression(beta[6]))
-
-par(oldpar)
-
-\donttest{
-#############################
-# Example on the yeast cell #
-# cycle data set            #
-#############################
-
-data(yeast)
-attach(yeast)
 y = SimulatedData$y
 t = SimulatedData$t
 id = SimulatedData$id
 X = SimulatedData[,4:103]
 
-y = yeast$mRNA
-t = yeast$Time
-id = yeast$Gene
-X = yeast[,c(4:99)]
+## Fit frequentist penalized NVC model with the SCAD penalty. 
+## Can set penalty as "gLASSO", "gSCAD", or "gMCP". 
+## No need to specify an 'id' argument when using NVC_frequentist() function
 
-## Set seed
-set.seed(12345)
+NVC_gSCAD_mod = NVC_frequentist(y, t, X, penalty="gSCAD")
 
-## Fit frequentist NVC model with group SCAD penalty
-nvc.gSCAD.mod = NVC_frequentist(y, t, X, penalty="gSCAD")
+## Classifications. First varying coefficients are selected as nonzero
+NVC_gSCAD_mod$classifications
 
-## TF's classified as significant
-nvc.gSCAD.mod$classifications
+## Optimal lambda chosen from BIC
+NVC_gSCAD_mod$lambda_min
 
-## Plot the first TF's functional
+## Plot first estimated varying coefficient function
+t_ordered = NVC_gSCAD_mod$t_ordered
+beta_hat= NVC_gSCAD_mod$beta_hat
+plot(t_ordered, beta_hat[,1], lwd=3, type='l', col='blue',
+     xlab="Time", ylim = c(-12,12), ylab=expression(beta[1]))
 
-oldpar <- par(no.readonly = TRUE)
+## Plot third estimated varying coefficient function
+plot(t_ordered, beta_hat[,3], lwd=3, type='l', col='blue',
+     xlab="Time", ylim = c(-4,2), ylab=expression(beta[3]))
 
-t.ordered = nvc.gSCAD.mod$t.ordered
-beta1.hat = nvc.gSCAD.mod$beta.hat[,1]
-
-plot(t.ordered, beta1.hat, type='l', lwd=5, xlab="Time", 
-     ylab=expression(beta[1]), main=colnames(X)[1])
-     
-par(oldpar)
-}
+## Plot fifth estimated varying coefficient function
+plot(t_ordered, beta_hat[,5], lwd=3, type='l', col='blue',
+     xlab="Time", ylim = c(0,15), ylab=expression(beta[5]))
 }

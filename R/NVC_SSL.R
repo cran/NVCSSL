@@ -1,318 +1,413 @@
-###################################
-###################################
-## FUNCTION FOR IMPLEMENTING THE ##
-## NVC-SSL MODEL.                ##
-###################################
-###################################
+#####################################
+## GIBBS SAMPLING FUNCTION FOR     ##
+## IMPLEMENTING THE NVC-SSL MODEL. ##                
+#####################################
 
 # INPUTS:
-# y = Nx1 vector of response observations y_11, ..., y_1n_1, ..., y_n1, ..., y_nn_n
-# t = Nx1 vector of observation times t_11, ..., t_1n_1, ..., t_n1, ..., t_nn_n
-# id = Nx1 vector of labels (different label corresponds to different subjects). Labels should be (1,...,1, 2,...,2, ..., n,....,n)
+# y = Nx1 vector of response observations y_11, ..., y_1m_1, ..., y_n1, ..., y_nm_n
+# t = Nx1 vector of observation times t_11, ..., t_1m_1, ..., t_n1, ..., t_nm_n
+# id = Nx1 vector of labels, where each unique label corresponds to one of the subjects
 # X = Nxp design matrix with columns [X_1, ..., X_p], where the kth column
-#     is (x_{1k}(t_11), ..., x_{1k}(t_1n_1), ..., x_{nk}(t_n1), ..., x_{nk}(t_nn_n))'
-# df = number of basis functions to use
-# cov.structure = covariance structure: can specify first-order autoregressive (AR1),
-#                 compound symmetry (CS), iid (ind), or unstructured
-# lambda0 = a ladder of increasing values for the hyperparameters. Default is {1,...,25}
-# lambda1 = a fixed small value for the hyperparameter. Default is 1
-# rho = correlation parameter
+#     is (x_{1k}(t_11), ..., x_{1k}(t_1m_1), ..., x_{nk}(t_n1), ..., x_{nk}(t_nm_n))
+# n_basis = number of basis functions to use. Default is n_basis=8.
+# lambda0 = grid of spike hyperparameters. Default is (300, 290, ..., 20, 10) 
+# lambda1 = slab hyperparameter. Default is 1.
 # a = hyperparameter in B(a,b) prior on theta. Default is 1.
 # b = hyperparameter in B(a,b) prior on theta. Default is p.
-# c0 = hyperparameter in IG(c_0/2,d_0/2) prior on sigma2. Default is 1.
-# d0 = hyperparameter in IG(c_0/2,d_0/2) prior on sigma2. Default is 1.
-# rho.support = support for hyperparameter rho. Default is (0, 0.1, ..., 0.9).
-#               Ignored if "ind" or "unstructured" is specified as covariance structure.
+# c0 = hyperparameter in Inverse-Gamma(c_0/2,d_0/2) prior on sigma2. Default is 1.
+# d0 = hyperparameter in Inverse-Gamma(c_0/2,d_0/2) prior on sigma2. Default is 1.
+# nu = degrees of freedom for Inverse-Wishart prior on Omega. Default is n_basis+2.
+# Phi = scale matrix in the Inverse-Wishart prior on Omega. Default is the identity matrix.
+# include_intercept = whether or not to include intercept function beta_0(t).
+#                     Default is TRUE.
 # tol = convergence criteria. Default is 1e-6.
-# print.iteration = flag for printing the current value of spike hyperparameter lambda0 in 
-#                    the lambda0 ladder. Default is TRUE.
+# max_iter = maximum number of iterations to run ECM algorithm. Default is 100.
+# return_CI = whether or not to return the 95% pointwise credible bands. Set return_CI=TRUE
+#             if credible bands are desired.
+# approx_MCMC = whether or not to run the approximate MCMC algorithm instead of the exact
+#               MCMC algorithm. If approx_MCMC=TRUE, then the approximate MCMC algorithm is 
+#               used. Otherwise. the exact MCMC algorithm is used. This argument is ignored
+#               if return_CI=FALSE.
+# n_samples = number of MCMC samples to save for posterior inference. Default is 1500.
+# burn = number of initial MCMC samples to discard during the warmup pereiod. Default is 500.
+# print_iter = Prints the progress of the algorithms. Default is TRUE.
 
 # OUTPUT:
-# t.ordered = all N time points in order from smallest to largest. Needed for plotting 
-# beta.hat = Nxp matrix of the function estimates. The kth column is the function estimate 
-#            beta_k(t_ij) evaluated at all N time observations t_ij, i=1,...,n, j=1,...,n_i.
-# gamma.hat = dfxp estimated basis coefficients (for prediction)
-# intercept = intercept beta_0 (for prediction)
-# classifications = px1 vector of indicator variables. "1" indicates covariate is significant, "0" indicates insignificant.
-# AICc = AIC with correction for small sample size. For model selection of degrees of freedom d
+# t_ordered = all N time points ordered from smallest to largest. Needed for plotting
+# classifications = px1 vector of indicator variables, where "1" indicates that the covariate is 
+#                   selected and "0" indicates that it is not selected.
+#                   These classifications are determined by the optimal lambda0 chosen from BIC.
+#                   Note that this vector does not include an intercept function.
+# beta_hat = Nxp matrix of the varying coefficient function MAP estimates for the optimal lambda0 
+#            chosen from BIC. The kth column in the matrix is the kth estimated function 
+#            at the observation times in t_ordered
+# beta0_hat =  intercept function MAP estimate at the observation times in t_ordered for the
+#              optimal lambda0 chosen from BIC. This is not returned if include_intercept = FALSE.
+# gamma_hat = MAP estimates for basis coefficients (needed for prediction) using the optimal lambda0.
+# beta_post_mean = Nxp matrix of the varying coefficient function posterior mean estimates.
+#                  The kth column in the matrix is the kth posterior mean function estimate at
+#                  the observation times in t_ordered. This is not returned if return_CI=FALSE.
+# beta_CI_lower = Nxp matrix of the lower endpoints of the 95% pointwise posterior credible interval (CI) for
+#                 the varying coefficient functions. The kth column in the matrix is the lower
+#                 endpoint for the kth varying coefficient's CI at the observation times in
+#                 t_ordered. This is not returned if return_CI=FALSE.
+# beta_CI_upper = Nxp matrix of the upper endpoints of the 95% pointwise posterior credible interval (CI) for
+#                 the varying coefficient functions. The kth column in the matrix is the upper
+#                 endpoint for the kth varying coefficient's CI at the observation times in
+#                 t_ordered. This is not returned if return_CI=FALSE.
+# beta0_post_mean = intercept function posterior mean estimate. This is only returned if return_CI=TRUE
+#                   and include_intercept=TRUE.
+# beta0_CI_lower = lower endpoints of the 95% pointwise posterior credible intervals for the intercept function.
+#                 This is only returned if return_CI=TRUE and include_intercept=TRUE.
+# beta0_CI_upper = upper endpoints of the 95% pointwise posterior credible intervals for the intercept function.
+#                 This is only returned if return_CI=TRUE and include_intercept=TRUE.
+# gamma_post_mean = estimated posterior means for basis coefficients. This is not returned if return_CI=FALSE.
+# gamma_CI_lower = lower endpoints of the 95% posterior credible intervals for the basis coefficients.
+# gamma_CI_upper = upper endpoints of the 95% posterior credible intervals for the basis coefficients.
+# post_incl = estimated posterior inclusion probabilities for each of the varying coefficients
+# lambda0_min = lambda0 which minimizes the BIC for the MAP estimator. If only one value was pass 
+#               for lambda0, then this just returns that lambda.
+# lambda0_all = grid of all L lambda0's.
+# BIC_all = Lx1 vector of BIC values corresponding to all L lambda0's in lambda0_all.
+#           The lth entry corresponds to the lth entry in lambda0_all.
+# beta_est_all_lambda0 = list of length L of the MAP estimates for the varying coefficients 
+#                        corresponding to all L lambda0's in lambda0_all. The lth entry corresponds 
+#                        to the lth entry in lambda0_all.
+# beta0_est_all_lambda0 = NxL matrix of MAP estimates for the intercept function corresponding 
+#                         to all L lambda0's in lambda0_all. The lth column corresponds to the lth
+#                        entry in lambda0_all.
+# gamma_est_all_lambda0 = dpxL matrix of MAP estimates for the basis coefficients corresponding to all
+#                        the lambda0's in lambda0_all. The lth column corresponds to the lth
+#                        entry in lambda0_all.
+# classifications_all_lambda0 = pxL matrix of classifications corresponding to all the 
+#                              lambda0's in lambda0_all. The lth column corresponds to the
+#                              lth entry in lambda0_all.
+# ECM_iters_to_converge = Lx1 vector of the number of iterations it took for the ECM algorithm 
+#                         to converge for each lambda0 in lambda0_all. The lth entry corresponds
+#                         to the lth entry in lambda0_all.
+# ECM_runtimes = Lx1 vector of the number of seconds it took for the ECM algorithm to converge
+#                for each lambda0 in lambda0_all. The lth entry corresponds to the lth entry
+#                in lambda0_all.
+# gibbs_runtime = number of minutes it took for the Gibbs sampling algorithm to run total
+#                 number of MCMC iterations given in gibbs_iters
+# gibbs_iters = total number of MCMC iterations
 
-NVC_SSL = function(y, t, id, X, df=8, cov.structure=c("AR1","CS","ind","unstructured"),
-                  lambda0=c(seq(from=5,to=30,by=5),seq(from=40,to=100,by=10)), lambda1=1, 
-                  a=1, b=ncol(X), c0=1, d0=1, rho.support=seq(0,0.9,by=0.1), 
-                  tol = 1e-6, print.iteration=TRUE) {
+
+NVC_SSL = function(y, t, id, X, n_basis=8, 
+                   lambda0=seq(from=300,to=10,by=-10), lambda1=1, 
+                   a=1, b=ncol(X), c0=1, d0=1, nu=n_basis+2, Phi=diag(n_basis),
+                   include_intercept=TRUE, tol=1e-6, max_iter=100, 
+                   return_CI=FALSE, approx_MCMC=FALSE,
+                   n_samples=1500, burn=500, print_iter=TRUE) {
   
-  
-  ##################
-  ##################
-  ### PRE-CHECKS ###
-  ##################
-  ##################
+  ################
+  ## PRE-CHECKS ##
+  ################
   
   ## Check that dimensions are conformal
-  if( length(t) != length(y) | length(y) != dim(X)[1] | length(t) != dim(X)[1] )
-    stop("Non-conformal dimensions for y, t, and X.")
-  ## Check that degrees of freedom is >=3
-  if( df <= 2 )
-    stop("Please enter a positive integer greater than or equal to three for degrees of freedom.")
-  ## Check that the ladder is increasing and that all relevant hyperparameters are positive
-  if ( !all.equal(cummax(lambda0), lambda0))
-    stop("Please enter a strictly increasing ladder of positive values for the spike hyperparameters.")
-  if ( !(all(lambda0 > 0) & (lambda1 > 0) & (a > 0) & (b > 0) & (c0 > 0) & (d0 > 0)) )
-    stop("Please make sure that all hyperparameters are strictly positive.")
-  if (lambda1 > min(lambda0))
+  if( length(t) != length(y) | length(y) != dim(X)[1] | length(t) != dim(X)[1] | length(t) != length(id) )
+    stop("Non-conformal dimensions for y, t, id, and X.")
+  ## Check that number of basis functions is >=3
+  if( n_basis <= 2 )
+    stop("Please enter a positive integer greater than or equal to three for number of basis functions.")
+  ## Check that all relevant hyperparameters are positive
+  if ( !(all(lambda0 > 0) & (lambda1 > 0) & (a > 0) & (b > 0) & (c0 > 0) & (d0 > 0) 
+         & (nu > n_basis-1) & all(eigen(Phi)$values > 0)) )
+    stop("Inappropriate values for some hyperparameters.")
+  if (any(lambda0<=lambda1))
     stop("Please make sure that lambda1 is smaller than lambda0.")
-  if (min(rho.support) < 0 || max(rho.support) >= 1)
-    stop("Please ensure that the support of rho is values greater than or equal to zero and strictly less than one.")
-
-  ###################
-  ###################
-  ### PRE-PROCESS ###
-  ###################
-  ###################
-
-  ## Coercion
-  cov.structure <- match.arg(cov.structure)
+  if(tol<=0)
+    stop("Please set a tolerance greater than 0.")
+  if(max_iter<10)
+    stop("Please set maximum number of iterations to at least 10.")
+  if( (n_samples<=0) || (burn<0))
+    stop("Please enter a valid number of samples and burnin for the Gibbs sampler.")
   
-  ## Make df an integer if not already
-  df = as.integer(df)
-  ## Make 'id' a factor vector if not already done
-  id = factor(id)
-  ## Make X a matrix if not already done
-  X = as.matrix(X)
-  ## Center y
-  y.mean = mean(y)
-  y = y-y.mean
+  ###################
+  ## PREPROCESSING ##
+  ###################
+  
+  ## Make id consecutive integers
+  id = as.integer(id)
+  id = cumsum(c(0, diff(id)) != 0) + 1
+  ## Sort data according to id
+  order_id = order(id)
+  id = id[order(id)]
+  y = y[order_id]
+  t = t[order_id]
+  X = X[order_id, ]
+  ## Make id a factor
+  id = as.factor(id)
+  
+  ## Make n_basis and max_iter an integer if not already
+  n_basis = as.integer(n_basis)
+  max_iter = as.integer(max_iter)
+  n_samples = as.integer(n_samples)
+  burn = as.integer(burn)
+  
+  ##################################
+  # Construct appropriate matrices #
+  # and vectors                    #
+  ##################################
   
   ## Extract total # of observations, # of subjects, # of observations per subject, # of covariates, and # of basis functions
-  n.tot = length(y)           # total number of observations
-  n.sub = length(unique(id))  # number of subjects
-  n.i = plyr::count(id)$freq        # nx1 vector of per-subject observations (n_1, ..., n_n)'
-  p = dim(X)[2]               # number of covariates
-  d = df                      # dimension of the vectors of basis coefficients
-  groups = rep(1:p, each=d)   # for groups of basis coefficients
-
-  ## Extract the subvectors y_i and t.i
-  y.i = vector("list", n.sub)
-  t.i = vector("list", n.sub)
-  for(r in 1:n.sub){
-    y.i[[r]] = as.matrix(y[which(id==r)])
-    t.i[[r]] = t[which(id==r)]
+  n_tot = length(y)           # total number of observations
+  n_i = plyr::count(id)$freq        # number of within-subject observations per subject
+  ## Make X a matrix if not already done
+  ## If include_intercept=TRUE, augment X with a column of ones
+  if(include_intercept==TRUE){
+    X = cbind(rep(1,n_tot), X)
   }
+  X = as.matrix(X)
+  n_sub = length(unique(id))  # number of subjects
+  p = dim(X)[2]               # number of covariates
+  d = n_basis                  # dimension of the vectors of basis coefficients
   
   ## Create Nxd spline matrix with d degrees of freedom
   B = splines::bs(t, df=d, intercept=TRUE)
   
   ## Matrix for storing individual B(t_ij) matrices
-  B.t = matrix(0, nrow=p, ncol=p*d)
+  B_t = matrix(0, nrow=p, ncol=p*d)
   
   ## Create the U matrix. U is an Nxdp matrix
-  U = matrix(0, nrow=n.tot, ncol=d*p) 
-  for(r in 1:n.tot){
+  U = matrix(0, nrow=n_tot, ncol=d*p) 
+  for(r in 1:n_tot){
     for(j in 1:p){
-      B.t[j,(d*(j-1)+1):(d*j)] = B[r,]
+      B_t[j,(d*(j-1)+1):(d*j)] = B[r,]
     }
-    U[r,] = X[r,] %*% B.t
+    U[r,] = X[r,] %*% B_t
   }
   ## Free memory
-  rm(B.t)
-  ## Column means for U
-  U.colmeans = colMeans(U)
+  rm(B_t)
+  ## Create the y_i subvectors and U_i submatrices
+  y_i = vector("list", n_sub)
+  U_i = vector("list", n_sub)
+  
+  for(r in 1:n_sub){
+    y_i[[r]] = matrix(y[which(id==r)])
+    U_i[[r]] = U[which(id==r),]
+  }
+  
+  ## Create the Z_i matrices
+  Z = splines::bs(t, df=d, intercept=FALSE)
+  Z_i = vector("list", n_sub)
+  for(r in 1:n_sub){
+    Z_i[[r]] = Z[which(id==r),]
+  }
+  ## Make Z the direct sum of the Z_i's
+  Z = dae::mat.dirsum(Z_i)
+  
+  ## Time-saving
+  UtU = crossprod(U,U)
+  Uty = crossprod(U,y)
+  UtZ = crossprod(U,Z)
+  
+  Zit_Zi = vector("list", n_sub)
+  Zit_yi = vector("list", n_sub)
+  Zit_Ui = vector("list", n_sub)
+  
+  for(r in 1:n_sub){
+    Zit_Zi[[r]] = crossprod(Z_i[[r]], Z_i[[r]])
+    Zit_yi[[r]] = crossprod(Z_i[[r]], y_i[[r]])
+    Zit_Ui[[r]] = crossprod(Z_i[[r]], U_i[[r]])
+  }
+  
+  ###################
+  ## ECM algorithm ##
+  ###################
+  
+  ## Sort lambda0
+  lambda0 = sort(lambda0, decreasing = TRUE)
+  # lambda0 = sort(lambda0)
+  ## Initialize gamma_old
+  gamma_old = rep(0, d*p)
+  ## Initialize theta_old
+  theta_old = 0.5
 
-  ## Create the U^i matrices
-  U.i = vector("list", n.sub)
-  for(r in 1:n.sub){
-      U.i[[r]] = U[which(id==r),]
+  ## For storing gamma, beta, beta0, classifications, BIC, iterations to converge
+  gamma_mat = matrix(0, nrow=length(gamma_old), ncol=length(lambda0))
+  beta_list = vector(mode='list', length=length(lambda0))
+  if(include_intercept==TRUE){
+    beta0_mat = matrix(0, nrow=n_tot, ncol=length(lambda0))
+    classifications_mat = matrix(0, nrow=p-1, ncol=length(lambda0))
+  } else{
+    classifications_mat = matrix(0, nrow=p, ncol=length(lambda0))
   }
-  
-  ## Create vectors to keep track of iterations to convergence and parameter estimates 
-  L = length(lambda0)
-  lambda0 = c(lambda0)
-  
-  # Initialize values for gamma and theta
-  gamma.hat = rep(0, d*p)             # initial gamma
-  gamma.hat.list = vector("list",p)   # to hold gamma_1, ..., gamma_p
-  theta.hat = 0.5                     # initial theta
-  
-  ## if covariance structure is not completely unstructured, initialize sigma2
-  if(cov.structure != "unstructured"){
+  BIC_vec = rep(0, length(lambda0))
+  iters_to_converge_vec = rep(0, length(lambda0))
+  ECM_runtimes_vec = rep(0, length(lambda0))
+    
+  ## Begin algorithm
+  for(l in 1:length(lambda0)){
+    ## Print iteration number
+    if(print_iter==TRUE)
+      cat("lambda0 =", lambda0[l], "\n")
+    
+    ## Initialize
+    gamma_init = gamma_old
+    theta_init = theta_old
+    lambda0_current = lambda0[l]
 
-    ## Initialize sigma2
-    df.sigma2 <- 3
-    sigquant <- 0.9
-    sigest <- stats::sd(y)
-    qchi <- stats::qchisq(1 - sigquant, df.sigma2)
-    ncp <- sigest^2 * qchi / df.sigma2
-    # Initial overestimate based on Chipman et al. (2010)
-    init.overestimate <- df.sigma2 * ncp / (df.sigma2 + 2)
+    start_time = Sys.time()
     
-    if(sigest >= 1){
-      sigma2.hat = init.overestimate
-    } else {
-      sigma2.hat = 1
+    ## ECM algorithm to update gamma_old
+    EM_mod = NVC_SSL_EM(y=y, t=t, Z=Z, U=U, B=B, Zit_Zi=Zit_Zi, Z_i=Z_i, y_i=y_i, U_i=U_i,  
+                        lambda0=lambda0_current, lambda1=lambda1, 
+                        n_basis=d, n_cov=p, n_sub=n_sub, n_tot=n_tot, 
+                        a=a, b=b, c0=c0, d0=d0, nu=nu, Psi=Phi,
+                        tol=tol, max_iter=max_iter, include_intercept=include_intercept,
+                        gamma_init=gamma_init, theta_init=theta_init)
+    
+    end_time = Sys.time()
+    
+    ## Store ECM runtime in seconds
+    ECM_runtimes_vec[l] <- as.double(difftime(end_time, start_time, units="secs"))
+    
+    ## Update gamma_old
+    gamma_old = EM_mod$gamma_hat
+    ## Update theta_old
+    theta_old = EM_mod$theta_hat
+    
+    ## Store results
+    gamma_mat[,l] = gamma_old
+    beta_list[[l]] = EM_mod$beta_hat
+    if(include_intercept==TRUE){
+      beta0_mat[,l] = EM_mod$beta0_hat
     }
+    classifications_mat[,l] = EM_mod$classifications
+    BIC_vec[l] = EM_mod$BIC
+    iters_to_converge_vec[l] = EM_mod$iters_to_converge
   }
   
-  ## If covariance structure is AR(1) or CS, we need the autocorrelation parameter
-  if(cov.structure=="AR1" || cov.structure=="CS"){
-    # to hold output for different values of rho
-    rho.vec = rho.support
-  }
+  ## lambda which minimizes the BIC
+  min_index = as.double(which.min(BIC_vec))
+  lambda0_min = lambda0[min_index]
   
-  ## If covariance structure is unstructured
-  if(cov.structure=="unstructured"){
-    # initial Sigma_i's, i=1,...,n
-    Sigma.i.hat = vector("list", n.sub)
-    
-    for(r in 1:n.sub)
-      Sigma.i.hat[[r]] = diag(n.i[r])
+  ## Best model according to BIC
+  beta_hat = beta_list[[min_index]]
+  if(include_intercept==TRUE){
+    beta0_hat = beta0_mat[,min_index]
   }
- 
-  #################################
-  #################################
-  ### EM algorithm with dynamic ### 
-  ### posterior exploration     ###
-  #################################
-  #################################
-
-  for(s in 1:L){
+  gamma_hat = gamma_mat[,min_index]
+  classifications = classifications_mat[,min_index]  
+  
+  ## If no posterior credible intervals are desired
+  if(return_CI==FALSE){
     
-    ## To output iteration
-    if(print.iteration==TRUE){
-      cat("lambda0 = ", lambda0[s], "\n")
-    }
-    
-    ## Initialize gamma and theta for the NVC-SSL model
-    gamma.init = gamma.hat
-    theta.init = theta.hat
-    
-    ## If covariance structure is not unstructured, initialize sigma2
-    if (cov.structure != "unstructured"){
-      sigma2.init = sigma2.hat
-    }
-    ## If covariance structure is unstructured
-    if (cov.structure == "unstructured"){
-      Sigma.i.init = vector("list", n.sub)
-      Sigma.i.init = Sigma.i.hat
-    }
-    
-    ## Run EM algorithm
-    if(cov.structure=="CS"){
-        EM_output = nvcssl_EM_auto.vec(rho=rho.vec, cov.structure="CS", y.i, U.i, t.i, n.i,
-                                  n.tot, n.sub, d, p, a, b, c0, d0, groups,
-                                  gamma.init, theta.init, sigma2.init, 
-                                  lambda0[s], lambda1, tol)
-    } else if(cov.structure=="ind"){
-        EM_output = nvcssl_EM_ind(y, U, n.tot, d, p, a, b, c0, d0, groups,
-                                  gamma.init, theta.init, sigma2.init,
-                                  lambda0[s], lambda1, tol)
-    } else if(cov.structure=="unstructured"){
-        EM_output = nvcssl_EM_unstructured(y.i, U.i, n.i, n.tot, n.sub, d, p, a, b, 
-                                           groups, gamma.init, theta.init, Sigma.i.init, 
-                                           lambda0[s], lambda1, tol)
-    } else {
-      ## AR(1) model is the default
-      EM_output = nvcssl_EM_auto.vec(rho=rho.vec, cov.structure="AR1", y.i, U.i, t.i, n.i,
-                                     n.tot, n.sub, d, p, a, b, c0, d0, groups,
-                                     gamma.init, theta.init, sigma2.init, 
-                                     lambda0[s], lambda1, tol)
-    }
-    
-    if(cov.structure == "AR1" || cov.structure == "CS"){
-      ## Compute optimal rho
-      max.log.lik = EM_output[,1]$log.lik
-      opt.rho.index = 1
-    
-      for(m in 2:length(rho.vec)){
-        if(EM_output[,m]$log.lik > max.log.lik){
-          max.log.lik = EM_output[,m]$log.lik
-          opt.rho.index = m
-        }
-      }
+    if(include_intercept==TRUE){
+      NVC_SSL_output <- list(t_ordered = EM_mod$t_ordered,
+                             classifications = classifications,
+                             beta_hat = beta_hat,
+                             beta0_hat = beta0_hat,
+                             gamma_hat = gamma_hat,
+                             lambda0_min = lambda0_min,
+                             lambda0_all = lambda0,
+                             BIC_all = BIC_vec,
+                             beta_est_all_lambda0 = beta_list,
+                             beta0_est_all_lambda0 = beta0_mat,
+                             gamma_est_all_lambda0 = gamma_mat,
+                             classifications_all_lambda0 = classifications_mat,
+                             ECM_iters_to_converge = iters_to_converge_vec,
+                             ECM_runtimes = ECM_runtimes_vec)
+      return(NVC_SSL_output)
       
-      ## Store rho.hat, gamma.hat, theta.hat, sigma2.hat for next pass
-      ## of dynamic posterior exploration
-      rho.hat = rho.vec[opt.rho.index]
-
-      gamma.hat = EM_output[,opt.rho.index]$gamma.hat
-      theta.hat = EM_output[,opt.rho.index]$theta.hat
-      sigma2.hat = EM_output[,opt.rho.index]$sigma2.hat
-
-    } else if(cov.structure=="ind"){
-      ## Store optimal gamma, theta, sigma2
-      gamma.hat = EM_output$gamma.hat
-      theta.hat = EM_output$theta.hat
-      sigma2.hat = EM_output$sigma2.hat
-  
-    } else if(cov.structure=="unstructured"){
-      ## Store optimal 
-      gamma.hat = EM_output$gamma.hat
-      theta.hat = EM_output$theta.hat
-      Sigma.i.hat = EM_output$Sigma.i.hat
-    } 
-  }
-  
-  ## Intercept estimate
-  intercept = y.mean - as.double(crossprod(U.colmeans,gamma.hat))
-  
-  ## Store U.tilde for AR(1) or CS
-  if (cov.structure == "AR1" || cov.structure == "CS"){
-    U.tilde = EM_output[,opt.rho.index]$U.tilde
-    y.tilde = EM_output[,opt.rho.index]$y.tilde
-  }
-  if (cov.structure=="unstructured"){
-    U.bar = EM_output$U.bar
-    y.bar = EM_output$y.bar
-  }
-  
-  ## Store gamma_1, ..., gamma_p in a list
-  gamma.hat.list = split(gamma.hat,as.numeric(gl(length(gamma.hat),d,length(gamma.hat))))
-  
-  ## Calculate the estimated beta_k(t)'s and store classifications
-  beta.hat = matrix(0, nrow=n.tot, ncol=p)
-  beta.ind.hat = rep(0,n.tot)
-  classifications = rep(0, p)
-  
-  for(k in 1:p){
-      ## Update beta.hat
-      beta.ind.hat = mat.mult(B, as.matrix(gamma.hat.list[[k]]))
-      beta.hat[,k] = beta.ind.hat[order(t)]
+    } else if(include_intercept==FALSE){
+      NVC_SSL_output <- list(t_ordered = EM_mod$t_ordered,
+                             classifications = classifications,
+                             beta_hat = beta_hat,
+                             gamma_hat = gamma_hat,
+                             lambda0_min = lambda0_min,
+                             lambda0_all = lambda0,
+                             BIC_all = BIC_vec,
+                             beta_est_all_lambda0 = beta_list,
+                             gamma_est_all_lambda0 = gamma_mat,
+                             classifications_all_lambda0 = classifications_mat,
+                             ECM_iters_to_converge = iters_to_converge_vec,
+                             ECM_runtimes = ECM_runtimes_vec)
       
-      ## Update classifications
-      if(!identical(beta.hat[,k],rep(0,n.tot)))
-        classifications[k] = 1    
-  } 
-  
-  ## Order the times
-  t.ordered = t[order(t)]
-  
-  ## Calculate the AICc
-  non.zero = which(gamma.hat!=0)
-  s.hat = sum(classifications)
-  
-  if(cov.structure == "AR1" || cov.structure == "CS"){
-    rss = sum((y.tilde-U.tilde[,non.zero]%*%gamma.hat[non.zero])^2)
-    AICc = log(rss/n.tot)+1+(2*(s.hat-1))/(n.tot-s.hat-2)
-  
-  } else if(cov.structure == "ind"){
-    rss = sum((y-U[,non.zero]%*%gamma.hat[non.zero])^2)
-    AICc = log(rss/n.tot)+1+(2*(s.hat-1))/(n.tot-s.hat-2)
-  
-  } else if(cov.structure == "unstructured"){
-    rss = sum((y.bar-U.bar[,non.zero]%*%gamma.hat[non.zero])^2)
-    AICc = log(rss/n.tot)+1+(2*(s.hat-1))/(n.tot-s.hat-2)
+      return(NVC_SSL_output)
+    }
   }
+  
+  ## If posterior credible intervals are desired, then 
+  ## we will also run the Gibbs sampler
+  if(return_CI==TRUE){
     
-  #####################
-  #####################
-  ### Return a list ###
-  #####################
-  #####################
-  NVC.SSL.output <- list(t.ordered = t.ordered,
-                         beta.hat = beta.hat,
-                         gamma.hat = gamma.hat,
-                         intercept = intercept,
-                         classifications = classifications,
-                         AICc = AICc) 
-  # Return list
-  return(NVC.SSL.output)
+    ## Run Gibbs sampler initialized at the estimate which minimizes the BIC
+    
+    gamma_init = gamma_hat
+    theta_init = theta_old
+    
+    start_time = Sys.time()
+    
+    gibbs_mod = NVC_SSL_gibbs(y=y, t=t, U=U, B=B, Z=Z, UtU=UtU, Uty=Uty, UtZ=UtZ, 
+                              Zit_Zi=Zit_Zi, Zit_yi=Zit_yi, Zit_Ui=Zit_Ui,
+                              lambda0=5, lambda1=1, 
+                              d=d, p=p, n_sub=n_sub, n_tot=n_tot,
+                              a=a, b=b, c0=c0, d0=d0, nu=nu, Psi=Phi,
+                              n_samples=n_samples, burn=burn, thres=0.5, 
+                              include_intercept=include_intercept, print_iter=print_iter, 
+                              gamma_init=gamma_init, theta_init=theta_init, approx_MCMC=approx_MCMC)
+
+    end_time = Sys.time()
+    
+    gibbs_runtime = as.double(difftime(end_time, start_time, units="mins"))
+    
+    if(include_intercept==TRUE){
+      
+      NVC_SSL_output <- list(t_ordered = EM_mod$t_ordered,
+                             classifications = classifications,
+                             beta_hat = beta_hat,
+                             beta0_hat = beta0_hat,
+                             gamma_hat = gamma_hat,
+                             beta_post_mean = gibbs_mod$beta_hat,
+                             beta_CI_lower = gibbs_mod$beta_CI_lower,
+                             beta_CI_upper = gibbs_mod$beta_CI_upper,
+                             beta0_post_mean = gibbs_mod$beta0_hat,
+                             beta0_CI_lower = gibbs_mod$beta0_CI_lower,
+                             beta0_CI_upper = gibbs_mod$beta0_CI_upper,
+                             gamma_post_mean = gibbs_mod$gamma_hat,
+                             gamma_CI_lower = gibbs_mod$gamma_CI_lower,
+                             gamma_CI_upper = gibbs_mod$gamma_CI_upper,
+                             post_incl = gibbs_mod$post_incl,
+                             lambda0_min = lambda0_min,
+                             lambda0_all = lambda0,
+                             BIC_all = BIC_vec,
+                             beta_est_all_lambda0 = beta_list,
+                             beta0_est_all_lambda0 = beta0_mat,
+                             gamma_est_all_lambda0 = gamma_mat,
+                             classifications_all_lambda0 = classifications_mat,
+                             ECM_iters_to_converge = iters_to_converge_vec,
+                             ECM_runtimes = ECM_runtimes_vec,
+                             gibbs_runtime = gibbs_runtime,
+                             gibbs_iters = gibbs_mod$gibbs_iters)
+      
+      return(NVC_SSL_output)
+      
+    } else if(include_intercept==FALSE){
+      NVC_SSL_output <- list(t_ordered = EM_mod$t_ordered,
+                             classifications = classifications,
+                             beta_hat = beta_hat,
+                             gamma_hat = gamma_hat,
+                             beta_post_mean = gibbs_mod$beta_hat,
+                             beta_CI_lower = gibbs_mod$beta_CI_lower,
+                             beta_CI_upper = gibbs_mod$beta_CI_upper,
+                             gamma_post_mean = gibbs_mod$gamma_hat,
+                             gamma_CI_lower = gibbs_mod$gamma_CI_lower,
+                             gamma_CI_upper = gibbs_mod$gamma_CI_upper,
+                             post_incl = gibbs_mod$post_incl,
+                             lambda0_min = lambda0_min,
+                             lambda0_all = lambda0,
+                             BIC_all = BIC_vec,
+                             beta_est_all_lambda0 = beta_list,
+                             gamma_est_all_lambda0 = gamma_mat,
+                             classifications_all_lambda0 = classifications_mat,
+                             ECM_iters_to_converge = iters_to_converge_vec,
+                             ECM_runtimes = ECM_runtimes_vec,
+                             gibbs_runtime = gibbs_runtime,
+                             gibbs_iters = gibbs_mod$gibbs_iters)
+      
+      return(NVC_SSL_output)
+    }
+  }
 }

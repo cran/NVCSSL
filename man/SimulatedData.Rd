@@ -1,20 +1,17 @@
 \name{SimulatedData}
 \alias{SimulatedData}
 
-\title{Simulated data with irregularly spaced time points and different number of within-subject observations.}
-\description{This data set contains simulated repeated measurements data on \eqn{n=30} subjects, each with a different number of time points and irregularly spaced time points. There are a total of \eqn{N=238} observations and \eqn{p=100} time-varying covariates.  
+\title{Simulated data for illustration}
+\description{This is a simulated dataset for illustration. It contains a total of \eqn{N=436} observations at irregularly spaced time points for \eqn{n=50} subjects. There are \eqn{p=100} covariates. 
  }
+
 \usage{data(SimulatedData)}
-\format{
-A dataframe with the following columns. 
-\describe{
-    \item{\code{y}:}{\eqn{N=238} responses for all \eqn{n=30} subjects.}
-    \item{\code{t}:}{\eqn{N=238} time points for all \eqn{n=30} subjects.}
-    \item{\code{id}:}{identifier for subject (1-30).}
-    \item{\code{X1-X100}:}{columns 4-103 are the 100 covariates for all \eqn{N} observations.}
-}
+
+\details{This simulated dataset contains \eqn{N=436} observations for \eqn{n=50} subjects, with \eqn{p=100} covariates. The first column \code{y} gives the response variables, the second column \code{t} gives the observation times, the third column \code{id} gives the unique IDs for each of the 50 subjects, and columns 4-103 (\code{x1}, ..., \code{x100}) give the covariate values.
+
+This synthetic dataset is a slight modification from Experiment 2 in Section 5.1 of Bai et al. (2023). We use \eqn{p=100} for illustration, instead of \eqn{p=500} as in the paper.
 }
 
-\references{ 
-Bai, R., Boland, M. R., and Chen, Y. (2020). "Fast algorithms and theory for high-dimensional Bayesian varying coefficient models." \emph{arXiv preprint arXiv:1907.06477}.
+\references{
+Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{arXiv pre-print arXiv:1907.06477}.
 }
