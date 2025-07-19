@@ -13,5 +13,5 @@ This synthetic dataset is a slight modification from Experiment 2 in Section 5.1
 }
 
 \references{
-Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{arXiv pre-print arXiv:1907.06477}.
+Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{Journal of Machine Learning Research}, \bold{24}:1-49.
 }

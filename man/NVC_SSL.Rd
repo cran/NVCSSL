@@ -72,7 +72,7 @@ NVC_SSL(y, t, id, X, n_basis=8,
 }
 
 \references{
-Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{arXiv pre-print arXiv:arXiv:1907.06477}.
+Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{Journala of Machine Learning Research}, \bold{24}:1-49.
 
 Bai, R., Moran, G. E., Antonelli, J. L., Chen, Y., and Boland, M.R. (2022). "Spike-and-slab group lassos for grouped regression and sparse generalized additive models." \emph{Journal of the American Statistical Association}, \bold{117}:184-197.
 }

@@ -25,7 +25,7 @@ NVC_predict(NVC_mod, t_new, id_new, X_new)
 }
 
 \references{
-Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{arXiv pre-print arXiv:arXiv:1907.06477}.
+Bai, R., Boland, M. R., and Chen, Y. (2023). "Scalable high-dimensional Bayesian varying coefficient models with unknown within-subject covariance." \emph{Journal of Machine Learning Research}, \bold{24}:1-49.
 }
 
 \examples{

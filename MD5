@@ -1,11 +1,11 @@
-f2da3c1b4de98ac9b2452de4b19feade *DESCRIPTION
+9dea1dbe98066786bbd22d4769787449 *DESCRIPTION
 59c62c25139fc392d126c58059b246b4 *NAMESPACE
 e4eeb6deecb6fef18300f1e438763691 *R/NVC_SSL.R
 43b3cc028ec9d340d744f044ee5bc884 *R/NVC_frequentist.R
 624da121fa13e6957d2d293718c2e347 *R/NVC_predict.R
 36f8484dfab5f644416c2b8b22e37535 *R/helper_functions.R
 67f2c6267726c901323e620d4dc52281 *data/SimulatedData.RData
-8752d186b09018e4e44aef2e60c7b397 *man/NVC_SSL.Rd
-a5ab6bdc85eb248fc62c922e075e0201 *man/NVC_frequentist.Rd
-54502ada5846240b975b13c054ab0e4e *man/NVC_predict.Rd
-3d9b4efe0f8a800a28002366b825950d *man/SimulatedData.Rd
+9dca7ff1d18df1cc7cd9812d864fe0fb *man/NVC_SSL.Rd
+78ffe36aaf73cf34c612ddf9ff4f03cd *man/NVC_frequentist.Rd
+573015263434bc49785484036e7661e5 *man/NVC_predict.Rd
+cf3b9fb089511c41b4f7d596b914d112 *man/SimulatedData.Rd
